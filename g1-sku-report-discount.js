@@ -5,8 +5,8 @@
 (function () {
   // Use a unique canonical report path so previous modules cannot mask updates.
   var ROOT = "https://one.google.com/g1-sku-report-pathfix";
-  var VERSION = "v7.12.2-pathfix";
-  var COLLECTOR_VERSION = "g1-acq-v7.12.2-pathfix";
+  var VERSION = "v7.12.3-pathfix";
+  var COLLECTOR_VERSION = "g1-acq-v7.12.3-pathfix";
   var MODE_NAMES = {
     discount75: "Ultra 三个月 75p（2.5折）",
     custom: "手动映射",
@@ -17,6 +17,7 @@
   var LEGACY_TARGET = "g1.2tb.ai.annual";
   var SCAN_KEY = "g1.sku.scan.v1";
   var TEST_KEY = "g1.pro.annual.test.v1";
+  var REQUEST_KEY = "g1.request.trace.v1";
 
   // BEGIN GENERATED MAPPING CONFIG
 /* Shared local mapping configuration for the runtime and report controller. */
@@ -424,7 +425,9 @@ function createG1MappingConfig(store) {
     try {
       var scanCleared = storage.write("{}", SCAN_KEY);
       var testCleared = storage.write("{}", TEST_KEY);
-      clearMessage = scanCleared && testCleared ? "本工具的两份本地记录已清空，映射配置保持原样。" : "本地记录清空未完成。";
+      var requestsCleared = storage.write("{}", REQUEST_KEY);
+      clearMessage = scanCleared && testCleared && requestsCleared ?
+        "本工具的请求、响应和测试记录已清空，映射配置保持原样。" : "本地记录清空未完成。";
     } catch (error) {
       clearMessage = "本地存储接口暂未就绪。";
     }
@@ -554,7 +557,8 @@ function createG1MappingConfig(store) {
     "limit-reached": "收到新编号，已达采集容量上限",
     "non-text": "收到响应，正文不是可扫描文本"
   };
-  var scanPaths = ["/", "/ai", "/plans", "/_/…/data/batchexecute", "[其他 one.google.com 路径]"];
+  var scanPaths = ["/", "/ai", "/plans", "/upsell", "/u/{n}/ai", "/u/{n}/upsell",
+    "/_/…/data/batchexecute", "[其他 one.google.com 路径]"];
   function recent(value) {
     if (!Array.isArray(value)) return [];
     return value.slice(-10).filter(function (event) {
@@ -577,6 +581,34 @@ function createG1MappingConfig(store) {
 
   var scanRaw = load(SCAN_KEY);
   var testRaw = load(TEST_KEY);
+  var requestRaw = load(REQUEST_KEY);
+  var requestHosts = ["one.google.com", "subscriptionsmobile-pa.googleapis.com",
+    "subscriptionsmanagement-pa.googleapis.com"];
+  var requestPaths = ["/ai", "/upsell", "/u/{n}/ai", "/u/{n}/upsell",
+    "/subscriptions-rpc", "/subscription-api"];
+  function safeCounters(values, allowed) {
+    var out = {};
+    allowed.forEach(function (name) {
+      out[name] = values && typeof values === "object" ? count(values[name]) : 0;
+    });
+    return out;
+  }
+  function requestEvents(items) {
+    if (!Array.isArray(items)) return [];
+    return items.slice(-80).filter(function (item) {
+      return item && typeof item.at === "string" &&
+        /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(item.at) &&
+        requestHosts.indexOf(item.host) !== -1 && requestPaths.indexOf(item.route) !== -1;
+    }).map(function (item) {
+      return {
+        at: item.at, host: item.host, route: item.route,
+        method: item.method === "POST" ? "POST" : "GET",
+        hasSc: item.hasSc === true,
+        skuCount: count(item.skuCount),
+        skus: Array.isArray(item.skus) ? item.skus.slice(0, 20).map(sku).filter(Boolean) : []
+      };
+    });
+  }
   var recordedTarget = sku(testRaw.target);
   if (!recordedTarget && /^(?:pro-annual-test-v[12]|g1-acq-v7(?:\.0|\.1)?)$/.test(testRaw.version || "")) {
     recordedTarget = LEGACY_TARGET;
@@ -609,6 +641,15 @@ function createG1MappingConfig(store) {
       status: config.status, revision: config.revision, updatedAt: config.updatedAt,
       mode: config.mode, customized: config.customized, rules: config.rules,
       target: config.target, targetOrigin: config.targetOrigin, error: config.error, limit: engine.limit
+    },
+    requestTrace: {
+      version: text(requestRaw.version, 40),
+      updatedAt: text(requestRaw.updatedAt, 32),
+      total: count(requestRaw.total),
+      byHost: safeCounters(requestRaw.byHost, requestHosts),
+      byRoute: safeCounters(requestRaw.byRoute, requestPaths),
+      recentRequests: requestEvents(requestRaw.recentRequests),
+      skus: rows(requestRaw.skus, true).slice(0, 100)
     },
     scan: {
       version: text(scanRaw.version, 32),
@@ -685,7 +726,52 @@ function createG1MappingConfig(store) {
         return "<tr><td>" + escape(beijingTime(event.at)) + "</td><td>" + escape(event.path) +
           "</td><td>" + scanStatuses[event.status] + "</td><td>" + event.candidateCount +
           "</td><td>" + event.addedCount + "</td><td>" + event.omittedCount + "</td></tr>";
+    }).join("") + "</tbody></table></div>";
+  }
+  function requestTable(events) {
+    if (!events.length) return "<p>暂无请求级记录。只统计被小火箭请求脚本实际捕获的请求。</p>";
+    return "<div class=scroll><table><thead><tr><th>北京时间 UTC+8</th><th>域名</th><th>路径</th>" +
+      "<th>方法</th><th>有 sc</th><th>请求中 SKU</th></tr></thead><tbody>" +
+      events.slice().reverse().map(function (entry) {
+        return "<tr><td>" + escape(beijingTime(entry.at)) + "</td><td>" + escape(entry.host) +
+          "</td><td><code>" + escape(entry.route) + "</code></td><td>" + entry.method +
+          "</td><td>" + (entry.hasSc ? "是" : "否") + "</td><td>" +
+          (entry.skus.length ? entry.skus.map(function (id) { return "<code>" + escape(id) + "</code>"; }).join("，") :
+            (entry.hasSc ? "未识别" : "—")) + "</td></tr>";
       }).join("") + "</tbody></table></div>";
+  }
+  function requestSection() {
+    var requests = report.requestTrace;
+    var lastRequest = Date.parse(requests.updatedAt || "");
+    var lastResponse = Date.parse(report.scan.updatedAt || "");
+    var newerRequest = isFinite(lastRequest) && (!isFinite(lastResponse) || lastRequest > lastResponse);
+    var hostItems = requestHosts.map(function (host) {
+      return "<tr><td><code>" + escape(host) + "</code></td><td>" + requests.byHost[host] + "</td></tr>";
+    }).join("");
+    var routeItems = requestPaths.map(function (route) {
+      return "<tr><td><code>" + escape(route) + "</code></td><td>" + requests.byRoute[route] + "</td></tr>";
+    }).join("");
+    var identified = requests.skus.map(function (item) {
+      return "<tr><td><code>" + escape(item.id) + "</code></td><td>" + item.count +
+        "</td><td>" + escape(beijingTime(item.lastSeen)) + "</td></tr>";
+    }).join("") || "<tr><td colspan=3>暂无从请求参数识别到的 SKU</td></tr>";
+    return "<section id=request-trace><h2>请求级诊断（与响应采集分开）</h2>" +
+      "<p><strong>已捕获请求：" + requests.total + " 次</strong>；已扫描文本响应：" +
+      report.scan.scannedResponses + " 次；最近请求：" + escape(beijingTime(requests.updatedAt)) + "</p>" +
+      "<p>请求记录版本：<code>" + escape(requests.version || "尚无记录") + "</code></p>" +
+      (newerRequest ? "<p class=note>最近一条请求比最近一次响应采集更新：有新请求记录，但尚未见到同样新的响应采集。" +
+        "这不代表一定是同一个请求缺少响应。</p>" : "") +
+      "<p class=note>此处从请求 URL 的 sc 参数读取可识别 SKU；下方响应采集仍只扫描响应正文。" +
+      "二者不是同一个计数。未捕获某个域名不等于 App 没有发送请求，HTTPS 解密或证书绑定可能使脚本无法看到它。" +
+      "不会保存完整 URL、session_id、Cookie 或响应正文。</p>" +
+      "<h3>域名请求次数</h3><div class=scroll><table><thead><tr><th>域名</th><th>捕获次数</th></tr></thead><tbody>" +
+      hostItems + "</tbody></table></div><h3>路径捕获次数</h3>" +
+      "<div class=scroll><table><thead><tr><th>路径</th><th>捕获次数</th></tr></thead><tbody>" +
+      routeItems + "</tbody></table></div><h3>最近 " + requests.recentRequests.length +
+      " 次请求</h3>" + requestTable(requests.recentRequests) +
+      "<h3>请求参数中识别的 SKU</h3><div class=scroll><table><thead><tr><th>编号</th><th>次数</th>" +
+      "<th>最近出现时间（北京时间）</th></tr></thead><tbody>" + identified +
+      "</tbody></table></div></section>";
   }
   var validConfig = config.status === "default" || config.status === "custom";
   var writable = !!(storageAvailable && typeof storage.write === "function" && config.status !== "unavailable");
@@ -829,7 +915,7 @@ function createG1MappingConfig(store) {
     noticeText ? "<p class=success role=status>" + escape(noticeText) + "</p>" : "",
     clearMessage ? "<p>" + escape(clearMessage) + "</p>" : "",
     storageAvailable ? "" : "<p>本地存储接口暂未就绪；此页尚未读取到采集记录。</p>",
-    presetTemplates(), mappingEditor(),
+    requestSection(), presetTemplates(), mappingEditor(),
     "<section><h2>采集运行记录</h2>",
     "<p>实际采集脚本：<code>" + escape(report.scan.version || "暂无记录") + "</code><br>实际采集模式：" + modeName(report.scan.mode) + "<br>" + scanVersionStatus + "</p>",
     "<p>已扫描文本响应：" + report.scan.scannedResponses + "；已记录非文本响应：" + report.scan.nonTextResponses +
@@ -854,7 +940,7 @@ function createG1MappingConfig(store) {
     table(report.scan.skus, true),
     "<p>更新时间（北京时间 UTC+8）：" + escape(beijingTime(report.scan.updatedAt)) + "</p></section>",
     "<form method=get action=\"" + ROOT + "\"><button name=clear value=1>清空本工具的采集与测试记录</button></form>",
-    "<p class=note>清空记录保留映射配置；浏览方案后刷新本页查看记录，独立采集器和历史改写副本保持停用。</p></html>"
+    "<p class=note>清空记录会清除请求、响应和测试历史，但保留映射配置。</p></html>"
   ].join("");
   $done({ response: { status: responseStatus, headers: headers, body: html } });
 })();
