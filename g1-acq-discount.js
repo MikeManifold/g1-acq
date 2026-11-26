@@ -318,7 +318,7 @@ function createG1MappingConfig(store) {
 // END GENERATED MAPPING CONFIG
 
 (function () {
-  var VERSION = "g1-acq-v7.12-mappings";
+  var VERSION = "g1-acq-v7.12.1-pathfix";
   var SOURCE_PREFIX = "g1.ios.2tb.";
   var TEST_KEY = "g1.pro.annual.test.v1";
   var SCAN_KEY = "g1.sku.scan.v1";

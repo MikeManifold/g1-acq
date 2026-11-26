@@ -4,8 +4,8 @@
 
 (function () {
   var ROOT = "https://one.google.com/g1-sku-report";
-  var VERSION = "v7.12.0";
-  var COLLECTOR_VERSION = "g1-acq-v7.12-mappings";
+  var VERSION = "v7.12.1-pathfix";
+  var COLLECTOR_VERSION = "g1-acq-v7.12.1-pathfix";
   var MODE_NAMES = {
     discount75: "Ultra 三个月 75p（2.5折）",
     custom: "手动映射",
@@ -652,6 +652,16 @@ function createG1MappingConfig(store) {
       return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[character];
     });
   }
+  // Keep all persisted and exported timestamps in UTC; only localize the HTML view.
+  function beijingTime(value) {
+    if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(value)) {
+      return value || "暂无";
+    }
+    var timestamp = Date.parse(value);
+    return isFinite(timestamp) ?
+      new Date(timestamp + 8 * 60 * 60 * 1000).toISOString().slice(0, 19).replace("T", " ") :
+      value;
+  }
   function fallbackName(row) {
     if (!row.fallback) return "否";
     var discount = /_ip_(\d+p)\.acq$/.exec(row.to || "");
@@ -660,18 +670,18 @@ function createG1MappingConfig(store) {
   function table(items, withTime) {
     if (!items.length) return "<p>暂无记录。</p>";
     return "<div class=scroll><table><thead><tr><th>完整商品编号</th><th>次数</th>" +
-      (withTime ? "<th>最近发现时间（UTC）</th><th>新增映射</th>" : "<th>实际目标 SKU</th><th>备用档</th>") + "</tr></thead><tbody>" +
+      (withTime ? "<th>最近发现时间（北京时间 UTC+8）</th><th>新增映射</th>" : "<th>实际目标 SKU</th><th>备用档</th>") + "</tr></thead><tbody>" +
       items.map(function (row) {
         return "<tr><td><code>" + escape(row.id) + "</code></td><td>" + row.count + "</td>" +
-          (withTime ? "<td>" + escape(row.lastSeen) + "</td><td><a href=\"" + ROOT + "?from=" + escape(encodeURIComponent(row.id)) + "#new-mapping\">用作源 SKU</a></td>" :
+          (withTime ? "<td>" + escape(beijingTime(row.lastSeen)) + "</td><td><a href=\"" + ROOT + "?from=" + escape(encodeURIComponent(row.id)) + "#new-mapping\">用作源 SKU</a></td>" :
             "<td><code>" + escape(row.to || "未记录") + "</code></td><td>" + fallbackName(row) + "</td>") + "</tr>";
       }).join("") + "</tbody></table></div>";
   }
   function recentTable(events) {
     if (!events.length) return "<p>尚无逐次响应记录；旧版采集数据没有这项诊断。</p>";
-    return "<div class=scroll><table><thead><tr><th>时间（UTC）</th><th>路径分类</th><th>本次结果</th><th>识别编号</th><th>新增录入</th><th>容量外编号</th></tr></thead><tbody>" +
+    return "<div class=scroll><table><thead><tr><th>时间（北京时间 UTC+8）</th><th>路径分类</th><th>本次结果</th><th>识别编号</th><th>新增录入</th><th>容量外编号</th></tr></thead><tbody>" +
       events.slice().reverse().map(function (event) {
-        return "<tr><td>" + escape(event.at) + "</td><td>" + escape(event.path) +
+        return "<tr><td>" + escape(beijingTime(event.at)) + "</td><td>" + escape(event.path) +
           "</td><td>" + scanStatuses[event.status] + "</td><td>" + event.candidateCount +
           "</td><td>" + event.addedCount + "</td><td>" + event.omittedCount + "</td></tr>";
       }).join("") + "</tbody></table></div>";
@@ -759,7 +769,7 @@ function createG1MappingConfig(store) {
     var parts = ["<section id=mapping-editor><h2>映射管理</h2>",
       "<p>修改原始 SKU、目标 SKU 或启用状态后，点击该条的保存按钮。</p>",
       "<p><strong>当前启用 " + enabledCount + " 条 / 共 " + config.rules.length + " 条</strong>，最多 " + engine.limit + " 条。</p>",
-      "<p>配置保存时间（UTC）：" + escape(config.updatedAt || "正在使用内建默认值，尚未手动保存") + "</p>"];
+      "<p>配置保存时间（北京时间 UTC+8）：" + escape(config.updatedAt ? beijingTime(config.updatedAt) : "正在使用内建默认值，尚未手动保存") + "</p>"];
     if (!validConfig) parts.push("<p class=error role=alert>" + escape(config.error) + "</p>");
     else if (applied) parts.push("<p class=success>最近一次映射执行已读取当前配置；当次改写 " + report.test.hitCount + " 次。</p>");
     else parts.push("<p class=note>等待下一次方案页响应读取当前配置；保存后重新进入 Google App 方案页，再刷新这里核对。</p>");
@@ -807,7 +817,8 @@ function createG1MappingConfig(store) {
     "<meta name=viewport content=\"width=device-width,initial-scale=1\"><title>Google One SKU 管理</title>",
     "<style>*{box-sizing:border-box}body{font:16px/1.6 -apple-system,BlinkMacSystemFont,sans-serif;max-width:960px;margin:24px auto;padding:0 18px;color:#1c2737;background:#f5f7fa}section{background:white;border:1px solid #dde3ec;border-radius:12px;padding:18px;margin:18px 0}h1{font-size:24px;margin-bottom:10px}h2{font-size:20px}code{overflow-wrap:anywhere}a{color:#1259be}table{border-collapse:collapse;width:100%;font-size:14px}td,th{padding:9px;border-bottom:1px solid #ddd;text-align:left;vertical-align:top}.scroll{overflow:auto}.note{color:#46556b}.badge,.success{background:#e0f4e8;color:#176238;padding:8px 12px;border-radius:8px}.badge{display:inline-block}.error{background:#fff0ef;color:#9b2420;padding:12px;border-radius:8px;overflow-wrap:anywhere}.actions{display:flex;gap:12px;flex-wrap:wrap;align-items:center;margin:18px 0}.actions form{margin:0}button,.actions a{font:inherit;padding:10px 16px;border:0;border-radius:8px;cursor:pointer;text-decoration:none}.actions a,button{background:#e4eaf3;color:#1c2737}.primary{background:#1259be;color:white}.delete{background:#fff0ef;color:#9b2420}fieldset{min-width:0;margin:0;border:1px solid #d7e0ec;border-radius:10px;padding:16px}legend{font-weight:600;padding:0 6px}.rule{margin:20px 0}.fields{display:grid;grid-template-columns:1fr 1fr;gap:16px}.fields label{font-weight:600;min-width:0}input[type=text],select{font:16px/1.4 -apple-system,BlinkMacSystemFont,sans-serif;width:100%;padding:12px;margin-top:6px;border:1px solid #a7b5c8;border-radius:7px;background:white;color:#1c2737}input[type=text]{font-family:ui-monospace,SFMono-Regular,monospace}.check{display:flex;align-items:center;gap:10px;align-self:end;min-height:48px}.check input{width:20px;height:20px}.rule .actions{margin-bottom:0}button:disabled,fieldset:disabled{opacity:.55}button:disabled{cursor:default}a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible{outline:3px solid #568ae3;outline-offset:3px}.reset{margin-top:24px}.preset-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:14px}.preset{min-width:0;margin:0}.preset fieldset{height:100%;display:flex;flex-direction:column}.preset legend{max-width:100%;font-size:16px}.preset .note{font-size:14px}.preset-pair{padding:10px;margin:12px 0;background:#f5f7fa;border-radius:6px}.preset-pair code{display:block;font-size:13px;line-height:1.6}.preset-state{align-self:flex-start;font-size:13px;padding:5px 8px;margin:0 0 12px;background:#e0f4e8;color:#176238;border-radius:6px}.preset button{width:100%;margin-top:auto}@media(max-width:600px){body{padding:0 10px;margin:16px auto}section{padding:14px}fieldset{padding:12px}.fields,.preset-grid{grid-template-columns:1fr}.actions{gap:8px}button{padding:10px 12px}}</style>",
     "<h1>Google One SKU 管理</h1>",
-    "<p class=badge>本机脚本已接管 · " + VERSION + "</p>",
+    "<p class=badge>本机报告 · " + VERSION + " · 北京时间 UTC+8</p>",
+    "<p class=note>页面时间已转换为北京时间（UTC+8）；导出的 JSON 仍保留原始 UTC 时间，方便排查日志。</p>",
     "<p><strong>当前报告入口：" + modeName(report.configuredMode) + "</strong></p>",
     "<nav class=actions aria-label=报告操作><form method=get action=\"" + ROOT + "\"><button type=submit name=format value=json>导出 JSON</button></form><a href=\"" + ROOT + "\">刷新报告</a></nav>",
     "<p class=note>此页由当前设备的 Shadowrocket 生成；地址栏沿用 one.google.com，映射配置与采集记录保存在当前设备。</p>",
@@ -821,7 +832,7 @@ function createG1MappingConfig(store) {
     "<p>实际采集脚本：<code>" + escape(report.scan.version || "暂无记录") + "</code><br>实际采集模式：" + modeName(report.scan.mode) + "<br>" + scanVersionStatus + "</p>",
     "<p>已扫描文本响应：" + report.scan.scannedResponses + "；已记录非文本响应：" + report.scan.nonTextResponses +
       "；含商品编号的响应：" + report.scan.matchedResponses + "；累计编号：" + report.scan.skus.length + "</p>",
-    "<p>最近保存时间（UTC）：" + escape(report.scan.updatedAt || "暂无") + "</p>",
+    "<p>最近保存时间（北京时间 UTC+8）：" + escape(beijingTime(report.scan.updatedAt)) + "</p>",
     latestScan ? "<p><strong>最近一条：" + scanStatuses[latestScan.status] + "</strong><br>识别 " +
       latestScan.candidateCount + " 个不同编号，新增录入 " + latestScan.addedCount + " 个，容量外 " + latestScan.omittedCount + " 个。</p>" : "",
     "<p class=note>累计清单按编号去重；收到相同编号会更新次数，清单条数保持不变。先记录计数和时间，重新打开 Google App 方案页，再刷新本报告对照。</p>",
@@ -831,7 +842,7 @@ function createG1MappingConfig(store) {
     "<p>当前配置的 2TB 前缀目标：<code>" + escape(report.configuredTarget || "未启用统一的 2TB 前缀规则") + "</code></p>",
     "<p class=note>精确规则可覆盖单个 2TB 编号，逐行实际目标见下表；实际商品、价格与扣款周期查看 App Store 购买面板。</p>",
     "<p>版本：" + escape(report.test.version || "暂无") + "<br>实际映射模式：" + modeName(report.test.mode) + "<br>状态：" + escape(status) + "；总替换次数：" + report.test.hitCount + "；其中 2TB：" + report.test.annualHitCount + "</p>",
-    "<p>2TB 源前缀：<code>g1.ios.2tb.</code><br>该次记录的 2TB 目标：<code>" + escape(report.test.target || "暂无记录") + "</code><br>" + configuredOffers + " 下表保留该次记录的实际目标与备用状态；历史 75p / 90p 备用按原记录显示。<br>执行所用配置保存时间（UTC）：" + escape(report.test.mappingUpdatedAt || "内建默认或旧记录未记录") + "<br>执行时间（UTC）：" + escape(report.test.updatedAt || "暂无") + "</p>",
+    "<p>2TB 源前缀：<code>g1.ios.2tb.</code><br>该次记录的 2TB 目标：<code>" + escape(report.test.target || "暂无记录") + "</code><br>" + configuredOffers + " 下表保留该次记录的实际目标与备用状态；历史 75p / 90p 备用按原记录显示。<br>执行所用配置保存时间（北京时间 UTC+8）：" + escape(report.test.mappingUpdatedAt ? beijingTime(report.test.mappingUpdatedAt) : "内建默认或旧记录未记录") + "<br>执行时间（北京时间 UTC+8）：" + escape(beijingTime(report.test.updatedAt)) + "</p>",
     "<p class=note>这里记录的是脚本执行结果；商品是否被 App Store 识别、价格和周期需查看购买面板。</p>",
     table(report.test.matchedFrom, false), "</section>",
     "<section><h2>浏览页面时采集到的候选 SKU</h2>",
@@ -839,7 +850,7 @@ function createG1MappingConfig(store) {
     "<p class=note>编号在改写前从原始响应中提取，并非商店的完整商品目录；脚本生成的替换目标不会自动加入这份清单。</p>",
     report.scan.truncated ? "<p>记录已达到 300 个上限；清空后可重新采集目标页面。</p>" : "",
     table(report.scan.skus, true),
-    "<p>更新时间（UTC）：" + escape(report.scan.updatedAt || "暂无") + "</p></section>",
+    "<p>更新时间（北京时间 UTC+8）：" + escape(beijingTime(report.scan.updatedAt)) + "</p></section>",
     "<form method=get action=\"" + ROOT + "\"><button name=clear value=1>清空本工具的采集与测试记录</button></form>",
     "<p class=note>清空记录保留映射配置；浏览方案后刷新本页查看记录，独立采集器和历史改写副本保持停用。</p></html>"
   ].join("");
