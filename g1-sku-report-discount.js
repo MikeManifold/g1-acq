@@ -3,9 +3,10 @@
 "use strict";
 
 (function () {
-  var ROOT = "https://one.google.com/g1-sku-report";
-  var VERSION = "v7.12.1-pathfix";
-  var COLLECTOR_VERSION = "g1-acq-v7.12.1-pathfix";
+  // Use a unique canonical report path so previous modules cannot mask updates.
+  var ROOT = "https://one.google.com/g1-sku-report-pathfix";
+  var VERSION = "v7.12.2-pathfix";
+  var COLLECTOR_VERSION = "g1-acq-v7.12.2-pathfix";
   var MODE_NAMES = {
     discount75: "Ultra 三个月 75p（2.5折）",
     custom: "手动映射",
@@ -333,7 +334,7 @@ function createG1MappingConfig(store) {
 // END GENERATED MAPPING CONFIG
 
   var url = typeof $request === "object" && $request ? $request.url : "";
-  if (typeof url !== "string" || !/^https:\/\/one\.google\.com\/g1-sku-report\/?(?:\?|$)/.test(url)) {
+  if (typeof url !== "string" || !/^https:\/\/one\.google\.com\/g1-sku-report(?:-pathfix)?\/?(?:\?|$)/.test(url)) {
     $done({});
     return;
   }
@@ -817,7 +818,8 @@ function createG1MappingConfig(store) {
     "<meta name=viewport content=\"width=device-width,initial-scale=1\"><title>Google One SKU 管理</title>",
     "<style>*{box-sizing:border-box}body{font:16px/1.6 -apple-system,BlinkMacSystemFont,sans-serif;max-width:960px;margin:24px auto;padding:0 18px;color:#1c2737;background:#f5f7fa}section{background:white;border:1px solid #dde3ec;border-radius:12px;padding:18px;margin:18px 0}h1{font-size:24px;margin-bottom:10px}h2{font-size:20px}code{overflow-wrap:anywhere}a{color:#1259be}table{border-collapse:collapse;width:100%;font-size:14px}td,th{padding:9px;border-bottom:1px solid #ddd;text-align:left;vertical-align:top}.scroll{overflow:auto}.note{color:#46556b}.badge,.success{background:#e0f4e8;color:#176238;padding:8px 12px;border-radius:8px}.badge{display:inline-block}.error{background:#fff0ef;color:#9b2420;padding:12px;border-radius:8px;overflow-wrap:anywhere}.actions{display:flex;gap:12px;flex-wrap:wrap;align-items:center;margin:18px 0}.actions form{margin:0}button,.actions a{font:inherit;padding:10px 16px;border:0;border-radius:8px;cursor:pointer;text-decoration:none}.actions a,button{background:#e4eaf3;color:#1c2737}.primary{background:#1259be;color:white}.delete{background:#fff0ef;color:#9b2420}fieldset{min-width:0;margin:0;border:1px solid #d7e0ec;border-radius:10px;padding:16px}legend{font-weight:600;padding:0 6px}.rule{margin:20px 0}.fields{display:grid;grid-template-columns:1fr 1fr;gap:16px}.fields label{font-weight:600;min-width:0}input[type=text],select{font:16px/1.4 -apple-system,BlinkMacSystemFont,sans-serif;width:100%;padding:12px;margin-top:6px;border:1px solid #a7b5c8;border-radius:7px;background:white;color:#1c2737}input[type=text]{font-family:ui-monospace,SFMono-Regular,monospace}.check{display:flex;align-items:center;gap:10px;align-self:end;min-height:48px}.check input{width:20px;height:20px}.rule .actions{margin-bottom:0}button:disabled,fieldset:disabled{opacity:.55}button:disabled{cursor:default}a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible{outline:3px solid #568ae3;outline-offset:3px}.reset{margin-top:24px}.preset-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:14px}.preset{min-width:0;margin:0}.preset fieldset{height:100%;display:flex;flex-direction:column}.preset legend{max-width:100%;font-size:16px}.preset .note{font-size:14px}.preset-pair{padding:10px;margin:12px 0;background:#f5f7fa;border-radius:6px}.preset-pair code{display:block;font-size:13px;line-height:1.6}.preset-state{align-self:flex-start;font-size:13px;padding:5px 8px;margin:0 0 12px;background:#e0f4e8;color:#176238;border-radius:6px}.preset button{width:100%;margin-top:auto}@media(max-width:600px){body{padding:0 10px;margin:16px auto}section{padding:14px}fieldset{padding:12px}.fields,.preset-grid{grid-template-columns:1fr}.actions{gap:8px}button{padding:10px 12px}}</style>",
     "<h1>Google One SKU 管理</h1>",
-    "<p class=badge>本机报告 · " + VERSION + " · 北京时间 UTC+8</p>",
+    "<p class=badge>新版已加载 · " + VERSION + " · 北京时间 UTC+8</p>",
+    "<p class=note>当前页面生成时间（北京时间）：<strong>" + escape(beijingTime(new Date().toISOString())) + "</strong></p>",
     "<p class=note>页面时间已转换为北京时间（UTC+8）；导出的 JSON 仍保留原始 UTC 时间，方便排查日志。</p>",
     "<p><strong>当前报告入口：" + modeName(report.configuredMode) + "</strong></p>",
     "<nav class=actions aria-label=报告操作><form method=get action=\"" + ROOT + "\"><button type=submit name=format value=json>导出 JSON</button></form><a href=\"" + ROOT + "\">刷新报告</a></nav>",

@@ -318,7 +318,7 @@ function createG1MappingConfig(store) {
 // END GENERATED MAPPING CONFIG
 
 (function () {
-  var VERSION = "g1-acq-v7.12.1-pathfix";
+  var VERSION = "g1-acq-v7.12.2-pathfix";
   var SOURCE_PREFIX = "g1.ios.2tb.";
   var TEST_KEY = "g1.pro.annual.test.v1";
   var SCAN_KEY = "g1.sku.scan.v1";
@@ -328,7 +328,7 @@ function createG1MappingConfig(store) {
   var url = typeof $request === "object" && $request ? $request.url : "";
 
   if (typeof url !== "string" || !/^https:\/\/one\.google\.com\//.test(url) ||
-      /^https:\/\/one\.google\.com\/g1-sku-report\/?(?:\?|$)/.test(url)) {
+      /^https:\/\/one\.google\.com\/g1-sku-report(?:-pathfix)?\/?(?:\?|$)/.test(url)) {
     $done({});
     return;
   }
