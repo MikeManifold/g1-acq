@@ -347,7 +347,9 @@ function createG1MappingConfig(store) {
     console.log("[g1-acq] SKU collection unavailable");
   }
 
-  if (!/^https:\/\/one\.google\.com\/ai\?/.test(url)) {
+  // Google One sometimes serves upgrade pages through account-specific or upsell routes.
+  // Keep the original SKU parser, mapping engine, and persistent report unchanged.
+  if (!/^https:\/\/one\.google\.com\/(?:u\/[0-9]+\/)?(?:ai|upsell)(?:\?|\/?(?:#|$))/.test(url)) {
     $done({});
     return;
   }
@@ -527,7 +529,8 @@ function createG1MappingConfig(store) {
   function safeRoute(requestUrl) {
     var path = requestUrl.replace(/^https:\/\/one\.google\.com/, "").split(/[?#]/)[0];
     path = path.replace(/\/+$/, "") || "/";
-    if (path === "/" || path === "/ai" || path === "/plans") return path;
+    if (path === "/" || path === "/ai" || path === "/plans" || path === "/upsell") return path;
+    if (/^\/u\/[0-9]+\/(?:ai|upsell)$/.test(path)) return path.replace(/^\/u\/[0-9]+/, "/u/{n}");
     if (/^\/_\/[^?#]+\/data\/batchexecute$/.test(path)) return "/_/…/data/batchexecute";
     return "[其他 one.google.com 路径]";
   }
@@ -544,6 +547,7 @@ function createG1MappingConfig(store) {
     if (typeof row.at !== "string" || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(row.at) ||
         !isFinite(Date.parse(row.at)) || new Date(row.at).toISOString() !== row.at) return null;
     if (row.path !== "/" && row.path !== "/ai" && row.path !== "/plans" &&
+        row.path !== "/upsell" && row.path !== "/u/{n}/ai" && row.path !== "/u/{n}/upsell" &&
         row.path !== "/_/…/data/batchexecute" && row.path !== "[其他 one.google.com 路径]") return null;
     if (row.bodyType !== "text" && row.bodyType !== "non-text") return null;
 
