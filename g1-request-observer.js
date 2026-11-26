@@ -1,11 +1,12 @@
 /* G1 ACQ request-side diagnostics.
- * Observes eligible HTTPS requests without changing them or making network calls.
+ * Observes eligible HTTPS requests without modifying them or making network calls.
+ * The dedicated /g1-request-check endpoint returns a local self-test response.
  * Only recognized SKU IDs and route categories are retained; not URLs/params/cookies.
  */
 "use strict";
 (function () {
   var KEY = "g1.request.trace.v1";
-  var VERSION = "g1-request-v7.12.3-pathfix";
+  var VERSION = "g1-request-v7.12.4-pathfix";
   var MAX_RECENT = 80, MAX_SKUS = 100, MAX_SINGLEREQ = 20;
   var request = typeof $request === "object" && $request ? $request : {};
   var url = typeof request.url === "string" ? request.url : "";
@@ -15,7 +16,8 @@
   var path = (m[2] || "/").replace(/\/+$/, "") || "/";
   var route = "";
   if (host === "one.google.com") {
-    if (path === "/ai" || path === "/upsell") route = path;
+    if (path === "/g1-request-check") route = "/request-check";
+    else if (path === "/ai" || path === "/upsell") route = path;
     else if (/^\/u\/\d+\/ai$/.test(path)) route = "/u/{n}/ai";
     else if (/^\/u\/\d+\/upsell$/.test(path)) route = "/u/{n}/upsell";
     else if (path === "/_/SubscriptionsManagementUi/data/batchexecute") route = "/subscriptions-rpc";
@@ -64,6 +66,7 @@
     method: request.method === "POST" ? "POST" : "GET",
     hasSc: !!query, skuCount: ids.length, skus: ids
   };
+  var saved = false;
   try {
     var store = typeof $persistentStore !== "undefined" ? $persistentStore : null;
     if (store && typeof store.read === "function" && typeof store.write === "function") {
@@ -103,9 +106,23 @@
       if (!store.write(JSON.stringify(newState), KEY)) {
         console.log("[g1-request] local-write-failed");
       } else {
+        saved = true;
         console.log("[g1-request] " + route + " skuCount=" + ids.length);
       }
     }
   } catch (e) { console.log("[g1-request] diagnostic-store-error"); }
+  if (route === "/request-check") {
+    $done({ response: {
+      status: 200,
+      headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" },
+      body: "<!doctype html><html lang=zh-CN><meta charset=utf-8>" +
+        "<meta name=viewport content='width=device-width,initial-scale=1'>" +
+        "<title>G1 Request Self-check</title><body style='font:18px -apple-system,sans-serif;padding:28px'>" +
+        "<h2>G1 请求脚本已执行</h2><p>版本：" + VERSION + "</p><p>本地记录：" +
+        (saved ? "写入成功" : "写入失败") +
+        "</p><p>现在打开 g1-sku-report-pathfix 查看请求级统计。</p></body></html>"
+    } });
+    return;
+  }
   $done({});
 })();

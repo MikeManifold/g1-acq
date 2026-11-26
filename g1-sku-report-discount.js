@@ -5,8 +5,8 @@
 (function () {
   // Use a unique canonical report path so previous modules cannot mask updates.
   var ROOT = "https://one.google.com/g1-sku-report-pathfix";
-  var VERSION = "v7.12.3-pathfix";
-  var COLLECTOR_VERSION = "g1-acq-v7.12.3-pathfix";
+  var VERSION = "v7.12.4-pathfix";
+  var COLLECTOR_VERSION = "g1-acq-v7.12.4-pathfix";
   var MODE_NAMES = {
     discount75: "Ultra 三个月 75p（2.5折）",
     custom: "手动映射",
@@ -584,7 +584,7 @@ function createG1MappingConfig(store) {
   var requestRaw = load(REQUEST_KEY);
   var requestHosts = ["one.google.com", "subscriptionsmobile-pa.googleapis.com",
     "subscriptionsmanagement-pa.googleapis.com"];
-  var requestPaths = ["/ai", "/upsell", "/u/{n}/ai", "/u/{n}/upsell",
+  var requestPaths = ["/request-check", "/ai", "/upsell", "/u/{n}/ai", "/u/{n}/upsell",
     "/subscriptions-rpc", "/subscription-api"];
   function safeCounters(values, allowed) {
     var out = {};
@@ -756,6 +756,8 @@ function createG1MappingConfig(store) {
         "</td><td>" + escape(beijingTime(item.lastSeen)) + "</td></tr>";
     }).join("") || "<tr><td colspan=3>暂无从请求参数识别到的 SKU</td></tr>";
     return "<section id=request-trace><h2>请求级诊断（与响应采集分开）</h2>" +
+      "<p><strong>请求脚本自检：" + (requests.byRoute["/request-check"] > 0 ?
+        "已通过（" + requests.byRoute["/request-check"] + " 次）" : "尚未通过") + "</strong></p>" +
       "<p><strong>已捕获请求：" + requests.total + " 次</strong>；已扫描文本响应：" +
       report.scan.scannedResponses + " 次；最近请求：" + escape(beijingTime(requests.updatedAt)) + "</p>" +
       "<p>请求记录版本：<code>" + escape(requests.version || "尚无记录") + "</code></p>" +

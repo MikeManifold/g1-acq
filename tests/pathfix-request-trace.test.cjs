@@ -70,6 +70,20 @@ test("counts are independent across one.google.com and subscription APIs", () =>
   assert.equal(state.recentRequests[0].route, "/ai");
 });
 
+test("request hook self-check proves script execution and persistent storage", () => {
+  const store = new Map();
+  const check = run(requestSource, q("/g1-request-check?diagnostic=1"), store);
+  assert.equal(check.output.response.status, 200);
+  assert(check.output.response.body.includes("G1 请求脚本已执行"));
+  assert(check.output.response.body.includes("写入成功"));
+  assert(check.output.response.body.includes("v7.12.4-pathfix"));
+  const state = JSON.parse(store.get(requestKey));
+  assert.equal(state.total, 1);
+  assert.equal(state.byRoute["/request-check"], 1);
+  const html = run(reportSource, q("/g1-sku-report-pathfix"), store).output.response.body;
+  assert(html.includes("请求脚本自检：已通过（1 次）"));
+});
+
 test("report separates request-side observations from response-side scan", () => {
   const store = new Map();
   const sc = Buffer.from("\x00g1.ios.30gb.m.3month_ip_75p\x01g1.ios.100gb.m").toString("base64");
@@ -77,8 +91,8 @@ test("report separates request-side observations from response-side scan", () =>
   run(requestSource, "https://subscriptionsmobile-pa.googleapis.com/v1/test", store);
   run(responseSource, q("/robots.txt"), store, "User-agent: *");
   const json = JSON.parse(run(reportSource, q("/g1-sku-report-pathfix?format=json"), store).output.response.body);
-  assert.equal(json.reportVersion, "v7.12.3-pathfix");
-  assert.equal(json.scan.version, "g1-acq-v7.12.3-pathfix");
+  assert.equal(json.reportVersion, "v7.12.4-pathfix");
+  assert.equal(json.scan.version, "g1-acq-v7.12.4-pathfix");
   assert.equal(json.scan.scannedResponses, 1);
   assert.equal(json.scan.skus.length, 0);
   assert.equal(json.test.hitCount, 0);
@@ -107,20 +121,22 @@ test("non-matching hosts and report pages are no-op", () => {
   assert(!store.has(requestKey));
 });
 
-test("module captures only desired paths and has one request observer", () => {
+test("module request rules separately match intended domains and self-check", () => {
   const module = fs.readFileSync(path.join(root, "g1-acq-ultra-discount.sgmodule"), "utf8");
-  const lines = module.split("\n").filter(x => x.startsWith("g1-request-observer = "));
-  assert.equal(lines.length, 1);
-  const pattern = lines[0].match(/pattern=([^,]+),requires-body=/)[1];
-  const re = new RegExp(pattern);
+  const lines = module.split("\n").filter(x => x.startsWith("g1-request-"));
+  assert.equal(lines.length, 5);
+  const expressions = lines.map(line => new RegExp(line.match(/pattern=([^,]+),requires-body=/)[1]));
   for (const url of [
+    q("/g1-request-check"),
     q("/ai?x=1"),q("/u/1/upsell?sc=123"),
     q("/_/SubscriptionsManagementUi/data/batchexecute?rpcids=abc"),
     "https://subscriptionsmobile-pa.googleapis.com/v1",
     "https://subscriptionsmanagement-pa.googleapis.com/v1"
-  ]) assert(re.test(url), url);
-  for (const url of [q("/g1-sku-report-pathfix"),"https://one.google.com.evil/ai"]) assert(!re.test(url), url);
+  ]) assert.equal(expressions.filter(re => re.test(url)).length, 1, url);
+  for (const url of [q("/g1-sku-report-pathfix"),"https://one.google.com.evil/ai"]) {
+    assert(expressions.every(re => !re.test(url)), url);
+  }
   assert.match(module, /hostname = %APPEND% one\.google\.com/);
   assert(!module.includes("192.168."));
-  assert.equal(module.split("script-path=").length - 1, 4);
+  assert.equal(module.split("script-path=").length - 1, 8);
 });
